@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kamus Afa</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#0f0f0f;
+color:white;
+padding:12px;
+}
+
+.header{
+background:#ff7a00;
+padding:14px;
+text-align:center;
+font-size:22px;
+font-weight:bold;
+border-radius:12px;
+margin-bottom:10px;
+}
+
+/* MENU */
+.menu{
+display:flex;
+gap:6px;
+margin-bottom:10px;
+}
+
+.menu button{
+flex:1;
+background:#2a2a2a;
+border:none;
+padding:10px;
+border-radius:10px;
+color:white;
+cursor:pointer;
+}
+
+/* VIEW + ANIMASI */
+.view{
+display:none;
+opacity:0;
+transform:translateY(10px);
+transition:0.25s ease;
+}
+
+.view.active{
+display:block;
+opacity:1;
+transform:translateY(0);
+}
+
+.card{
+background:#1c1c1c;
+padding:12px;
+border-radius:12px;
+margin-bottom:12px;
+}
+
+/* INPUT */
+input,textarea{
+width:100%;
+padding:10px;
+margin:6px 0;
+border-radius:8px;
+border:none;
+outline:none;
+}
+
+/* BUTTON */
+button{
+background:#ff7a00;
+border:none;
+padding:8px 10px;
+border-radius:8px;
+color:white;
+cursor:pointer;
+margin-top:5px;
+}
+
+.back{background:#555;}
+
+/* WORD LIST */
+.word{
+background:#2a2a2a;
+padding:10px;
+border-radius:10px;
+margin-top:8px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:10px;
+}
+
+.word-left{flex:1;}
+
+.actions{
+display:flex;
+gap:6px;
+}
+
+.actions button{
+padding:6px 10px;
+border-radius:8px;
+font-size:12px;
+}
+
+.btn-fav{background:#f39c12;}
+.btn-del{background:#c0392b;}
+
+/* SUGGESTION BOX */
+.suggest{
+background:#111;
+border-radius:8px;
+margin-top:5px;
+padding:5px;
+font-size:13px;
+color:#aaa;
+}
+.suggest div{
+padding:4px;
+cursor:pointer;
+}
+.suggest div:hover{
+color:white;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">📚 Kamus Afa</div>
+
+<!-- MENU -->
+<div class="menu">
+<button onclick="openView('addView')">➕ Tambah</button>
+<button onclick="openView('deletedView')">🗑 Hapus</button>
+<button onclick="openView('deleteView')">❌ Permanen</button>
+<button onclick="openView('favView')">⭐ Favorite</button>
+</div>
+
+<!-- HOME -->
+<div id="homeView" class="view active">
+
+<div class="card">
+<h3>Pencarian Kata</h3>
+
+<div style="display:flex; gap:6px;">
+<input id="prefix" placeholder="Awalan (kiri)" oninput="search();suggest()">
+<input id="suffix" placeholder="Akhiran (kanan)" oninput="search()">
+</div>
+
+<div id="suggestBox" class="suggest"></div>
+
+<div id="result"></div>
+</div>
+
+</div>
+
+<!-- ADD -->
+<div id="addView" class="view">
+<div class="card">
+<h3>➕ Tambah Kata</h3>
+<textarea id="input"></textarea>
+<button onclick="add()">Tambah</button>
+<button class="back" onclick="openView('homeView')">Kembali</button>
+</div>
+</div>
+
+<!-- DELETED -->
+<div id="deletedView" class="view">
+<div class="card">
+<h3>🗑 Kata Dihapus</h3>
+<button onclick="showDeleted()">Load</button>
+<button class="back" onclick="openView('homeView')">Kembali</button>
+<div id="deletedList"></div>
+</div>
+</div>
+
+<!-- DELETE PERMANENT -->
+<div id="deleteView" class="view">
+<div class="card">
+<h3>❌ Hapus Permanen</h3>
+<input id="deleteInput" placeholder="Ketik kata">
+<button onclick="deletePermanent()">Hapus</button>
+<button class="back" onclick="openView('homeView')">Kembali</button>
+</div>
+</div>
+
+<!-- FAVORITE -->
+<div id="favView" class="view">
+<div class="card">
+<h3>⭐ Favorite</h3>
+<button onclick="showFav()">Load Favorite</button>
+<button class="back" onclick="openView('homeView')">Kembali</button>
+<div id="favList"></div>
+</div>
+</div>
+
+<script>
+
+let data = JSON.parse(localStorage.getItem("kamusAfa")||"[]");
+
+function save(){
+localStorage.setItem("kamusAfa",JSON.stringify(data));
+}
+
+/* VIEW */
+function openView(id){
+document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+let el=document.getElementById(id);
+el.classList.add("active");
+}
+
+/* ADD */
+function add(){
+let txt=document.getElementById("input").value.trim();
+if(!txt)return;
+
+txt.split("\n").forEach(w=>{
+if(!data.find(x=>x.word.toLowerCase()===w.toLowerCase())){
+data.push({word:w,fav:false,del:false});
+}
+});
+
+save();
+document.getElementById("input").value="";
+}
+
+/* ================= SEARCH REALTIME ================= */
+function search(){
+
+let p=document.getElementById("prefix").value.toLowerCase().trim();
+let s=document.getElementById("suffix").value.toLowerCase().trim();
+
+let res=data.filter(x=>{
+if(x.del) return false;
+let w=x.word.toLowerCase();
+
+let ok=true;
+if(p) ok = ok && w.startsWith(p);
+if(s) ok = ok && w.endsWith(s);
+
+return ok;
+});
+
+/* favorite priority + A-Z */
+res.sort((a,b)=>{
+if(a.fav&&!b.fav) return -1;
+if(!a.fav&&b.fav) return 1;
+return a.word.localeCompare(b.word);
+});
+
+document.getElementById("result").innerHTML =
+res.map(x=>`
+<div class="word">
+  <div class="word-left">${x.fav?"⭐ ":""}${x.word}</div>
+
+  <div class="actions">
+    <button class="btn-fav" onclick="toggleFav('${x.word}')">⭐</button>
+    <button class="btn-del" onclick="del('${x.word}')">🗑</button>
+  </div>
+</div>
+`).join("");
+}
+
+/* ================= SUGGESTION (NEW) ================= */
+function suggest(){
+let p=document.getElementById("prefix").value.toLowerCase().trim();
+let box=document.getElementById("suggestBox");
+
+if(!p){
+box.innerHTML="";
+return;
+}
+
+let sug=data.filter(x=>{
+if(x.del) return false;
+return x.word.toLowerCase().startsWith(p);
+}).slice(0,5);
+
+box.innerHTML=sug.map(x=>`
+<div onclick="setWord('${x.word}')">${x.word}</div>
+`).join("");
+}
+
+function setWord(w){
+document.getElementById("prefix").value=w;
+suggest();
+search();
+}
+
+/* FAVORITE */
+function toggleFav(w){
+let x=data.find(a=>a.word===w);
+if(x){
+x.fav=!x.fav;
+save();
+search();
+}
+}
+
+/* DELETE */
+function del(w){
+let x=data.find(a=>a.word===w);
+if(x){
+x.del=true;
+save();
+search();
+}
+}
+
+/* DELETED */
+function showDeleted(){
+let d=data.filter(x=>x.del);
+let box=document.getElementById("deletedList");
+
+box.innerHTML=d.map(x=>`
+<div class="word">
+<div class="word-left">${x.word}</div>
+<div class="actions">
+<button onclick="restore('${x.word}')">↩</button>
+</div>
+</div>
+`).join("");
+}
+
+/* RESTORE */
+function restore(w){
+let x=data.find(a=>a.word===w);
+if(x){
+x.del=false;
+save();
+showDeleted();
+}
+}
+
+/* PERMANENT DELETE */
+function deletePermanent(){
+let w=document.getElementById("deleteInput").value.trim().toLowerCase();
+data=data.filter(a=>a.word.toLowerCase()!==w);
+save();
+document.getElementById("deleteInput").value="";
+}
+
+/* FAVORITE VIEW */
+function showFav(){
+let f=data.filter(x=>x.fav && !x.del);
+let box=document.getElementById("favList");
+
+box.innerHTML=f.map(x=>`
+<div class="word">
+<div class="word-left">${x.word}</div>
+<div class="actions">
+<button class="btn-fav" onclick="toggleFav('${x.word}');showFav()">⭐</button>
+</div>
+</div>
+`).join("");
+}
+
+</script>
+
+</body>
+</html>
